@@ -2,7 +2,7 @@
  * share.js — 결과 공유 텍스트 + 월별 달력 공유 (DailyWordship/src/daily/share.js와 같은 방식).
  */
 
-export const GAME_TITLE = '흑백 지뢰찾기';
+export const GAME_TITLE = '데일리 흑백 지뢰찾기';
 
 /** 초 → 'm:ss' */
 export function formatSeconds(sec) {
@@ -24,7 +24,7 @@ export function buildSummaryLine({ won, total, hit, seconds, lives }) {
   return `${won ? '🎯' : '💥'} ${hit}/${total} · ⏱ ${formatSeconds(seconds)}${life}`;
 }
 
-/** 공유용 전체 텍스트. title 예: '흑백 지뢰찾기 · 스탠다드 · 2026-09-27' */
+/** 공유용 전체 텍스트. title 예: '데일리 흑백 지뢰찾기 · 스탠다드 · 2026-09-27' */
 export function buildShareText({ title, result }) {
   return [title, buildSummaryLine(result), buildTargetRow(result), ''].join('\n');
 }

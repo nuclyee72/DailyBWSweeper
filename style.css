@@ -40,7 +40,7 @@
   --laser-black-halo:   rgba(255, 255, 255, 0.8);
   --laser-white-core:   #ffffff;
   --laser-white-halo:   rgba(35, 39, 51, 0.5);
-  --laser-hl:           #f2b705;  /* 레이저 강조 (노랑) */
+  --laser-hl:           rgba(242, 183, 5, 0.5);  /* 레이저 강조 (옅은 노랑) */
 }
 
 [data-theme="dark"] {
@@ -81,7 +81,7 @@
   --laser-black-halo:   rgba(185, 190, 200, 0.55);
   --laser-white-core:   #d4d8df;
   --laser-white-halo:   rgba(0, 0, 0, 0.6);
-  --laser-hl:           #ffd23f;
+  --laser-hl:           rgba(255, 210, 63, 0.45);
 }
 
 /* ── 기본 ── */
@@ -135,6 +135,9 @@ html, body {
   font-size: 26px;
   font-weight: 700;
   color: var(--text-given);
+  /* 긴 제목이 단어 중간에서 끊기지 않게, 두 줄이면 고르게 */
+  word-break: keep-all;
+  text-wrap: balance;
 }
 .landing-title-icon { font-size: 0.9em; margin-right: 2px; }
 
@@ -505,7 +508,7 @@ html, body {
 .game-screen:not(.mode-laser) .lasers-main .laser.laser-lit { opacity: 0.1; }
 /* 거울 모드에서 마우스를 올린(누른) 칸을 지나는 레이저 — 노랗게 강조 */
 .game-screen .lasers-main .laser.is-hl { opacity: 1 !important; }
-.lasers-main .laser.is-hl .laser-halo { stroke: var(--laser-hl); stroke-width: 0.22; }
+.lasers-main .laser.is-hl .laser-halo { stroke: var(--laser-hl); stroke-width: 0.16; }
 .game-screen:not(.mode-laser) .lasers-main .mirror { opacity: 0.45; }
 
 /* ── 좁은 화면: 판은 가운데, 패널은 아래에 붙는 시트 (스도쿠 모바일 세로와 같은 방식) ── */
