@@ -56,7 +56,7 @@ const laserSvg = $('laser-layer');
  *   finished: boolean, lostBy: string|null, explodedIdx: number, lives: number } | null}
  */
 let session = null;
-const ui = { inputMode: 'open', hoverIdx: -1, touchIdx: -1, generating: false };
+const ui = { inputMode: 'open', hoverIdx: -1, touchIdx: -1, generating: false, answer: null };
 let palette = null;
 let zoom = null;
 let timerId = 0;
@@ -114,6 +114,10 @@ function whereLabel(s) {
   return '자유 연습';
 }
 
+function baseLabel() {
+  return `${modeOf(session.modeId).label} · ${whereLabel(session)}`;
+}
+
 function sessionTitle() {
   const mode = modeOf(session.modeId);
   return [GAME_TITLE, mode.label, session.kind === 'free' ? '자유 연습' : session.date].join(' · ');
@@ -142,9 +146,13 @@ function openGame({ kind, modeId, date, seed, board, progress = null }) {
   palette.close();
   zoom.reset();
   closePanel($('daily-result-modal'));
+  ui.answer = null;
+  gameScreen.classList.remove('viewing-answer');
   setInputMode('open');
-  $('ds-mode-label').textContent = `${modeOf(modeId).label} · ${whereLabel(session)}`;
+  $('ds-mode-label').textContent = baseLabel();
   $('btn-new-free').hidden = kind !== 'free';
+  $('btn-view-answer').textContent = '정답 보기';
+  $('btn-view-answer').hidden = !(session.finished && board.solution);
   showGame();
   refresh();
   if (session.finished) setTimeout(showResultModal, 200);
@@ -309,6 +317,7 @@ function finish(lostBy) {
   session.finished = true;
   session.lostBy = lostBy;
   pauseTimer();
+  $('btn-view-answer').hidden = !session.board.solution;
   if (session.kind === 'daily') {
     const { won, seconds } = targetResult();
     recordResult(session.date, won ? 'solved' : 'failed', seconds, session.modeId);
@@ -456,8 +465,51 @@ function updateHighlight() {
     return;
   }
   const ks = [];
-  session.traces.forEach((t, k) => { if (t.cells?.includes(i)) ks.push(k); });
+  (ui.answer?.traces ?? session.traces).forEach((t, k) => { if (t.cells?.includes(i)) ks.push(k); });
   highlightLasers(laserSvg, ks);
+}
+
+// ── 정답 보기 (끝난 판에서만) ──
+/**
+ * 판을 만들 때 검증해 둔 풀이 하나를 보여 준다 — 판 전체를 열고, 풀이의 거울을 켠 모습과 레이저 경로.
+ * 실제 판은 건드리지 않고 복사본에 그린다 (진행·기록은 그대로).
+ */
+function showAnswer() {
+  const { board } = session;
+  if (!session.finished || !board.solution) return;
+  const ans = structuredClone(board);
+  for (const c of ans.cells) {
+    c.revealed = true;
+    c.active = false;
+    c.mark = null;
+    c.wrongMark = false;
+  }
+  // solution.order는 배열에 붙인 속성이라 복사본엔 없다 — 원본에서 읽는다
+  for (const i of board.solution.order) ans.cells[i].active = true;
+  ans.gameOver = true;
+  ans.won = true;
+  const { traces } = computeLasers(ans);
+  ui.answer = { board: ans, traces };
+
+  gameScreen.classList.add('viewing-answer');
+  for (const el of session.cellEls) el.classList.remove('is-exploded');
+  renderAll(session.cellEls, ans);
+  drawLasers(laserSvg, ans, traces);
+  updateHighlight();
+  $('btn-view-answer').textContent = '내 판 보기';
+  $('ds-mode-label').textContent = `${baseLabel()} · 정답 (여러 풀이 중 하나)`;
+}
+
+function hideAnswer() {
+  if (!ui.answer) return;
+  ui.answer = null;
+  gameScreen.classList.remove('viewing-answer');
+  renderAll(session.cellEls, session.board);
+  renderExploded();
+  drawLasers(laserSvg, session.board, session.traces);
+  updateHighlight();
+  $('btn-view-answer').textContent = '정답 보기';
+  $('ds-mode-label').textContent = baseLabel();
 }
 
 // ── 결과 모달 ──
@@ -720,7 +772,8 @@ function init() {
   // 레이저 좌표는 실제 칸 크기에 맞춰 계산하므로 창 크기가 바뀌면 다시 그린다
   window.addEventListener('resize', () => {
     if (!session) return;
-    drawLasers(laserSvg, session.board, session.traces);
+    if (ui.answer) drawLasers(laserSvg, ui.answer.board, ui.answer.traces);
+    else drawLasers(laserSvg, session.board, session.traces);
     updatePreview();
     updateHighlight();
   });
@@ -741,6 +794,7 @@ function init() {
   $('btn-game-stats').addEventListener('click', () => openStatsModal());
   $('btn-game-help').addEventListener('click', openHelpModal);
   $('btn-new-free').addEventListener('click', () => startFreePlay(session.modeId));
+  $('btn-view-answer').addEventListener('click', () => (ui.answer ? hideAnswer() : showAnswer()));
 
   // 랜딩
   for (const btn of document.querySelectorAll('[data-daily]')) btn.addEventListener('click', () => startDaily(btn.dataset.daily));

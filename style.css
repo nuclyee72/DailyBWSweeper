@@ -1084,3 +1084,20 @@ html, body {
 .ds-cell.is-known { box-shadow: inset 0 0 0 2px var(--conflict); }
 @keyframes life-lost { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
 .ds-cell.is-life-lost { animation: life-lost 0.4s ease; }
+
+/* ── 정답 보기: 레이저를 모두 또렷하게 ── */
+.game-screen.viewing-answer .lasers-main .laser { opacity: 0.85 !important; }
+.game-screen.viewing-answer .board-grid { box-shadow: 0 0 0 3px var(--lit), 0 0 28px var(--board-glow), 0 24px 48px rgba(20, 24, 40, 0.14); }
+
+/* ── 좁은 화면: 위쪽 바를 두 줄로 — 1줄 [메인 화면 … 버튼들], 2줄 [명중 · 라이프 · 시간] ── */
+@media (max-width: 480px) {
+  .ds-topbar {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "back right" "status status";
+    row-gap: 4px;
+  }
+  .ds-topbar > #btn-go-landing { grid-area: back; }
+  .ds-topbar > .ws-topbar-right { grid-area: right; }
+  .ds-topbar > .ds-status { grid-area: status; justify-self: center; }
+  .ds-status-targets strong { font-size: 19px; }
+}
