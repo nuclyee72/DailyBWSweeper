@@ -24,6 +24,7 @@ export const BOOM_ENDS = new Set(['mine', 'wrong']);
 
 /** 플레이어가 안 연 칸에 다는 지뢰 표시. 표시가 달린 칸은 눌러도 열리지 않는다 (실수 방지). */
 export const MARKS = ['mine-black', 'mine-white'];
+const MARK_COLOR = { 'mine-black': COLOR.BLACK, 'mine-white': COLOR.WHITE };
 
 /** 표시가 실제 칸과 맞는지 */
 function markMatches(cell) {
@@ -607,6 +608,7 @@ export function countMarks(board, mark) {
  * cells: 지나간 칸들 (레이저 강조 표시용)
  * visibleOnly: 플레이어에게 보이는 정보(켜진 거울, 열린 칸 — 반전기는 레이저 색이 바뀌는 게 늘 보이므로 포함)만으로 따라간다 — 미리보기용.
  *   안 연 칸의 지뢰·특수 칸을 무시하므로 숨은 정보가 새지 않는다.
+ *   대신 안 연 칸에 단 지뢰 표시(플레이어의 추측)는 그 색 지뢰로 본다 — 맞는지와 상관없이.
  */
 export function traceLaser(board, em, { visibleOnly = false } = {}) {
   let x = em.x;
@@ -634,6 +636,7 @@ export function traceLaser(board, em, { visibleOnly = false } = {}) {
 
     // 같은 색 지뢰는 폭발, 반대 색 지뢰는 그대로 지나간다
     if (known && cell.isMine && cell.mineColor === color) return finish('mine', i, center);
+    if (!known && MARK_COLOR[cell.mark] === color) return finish('mine', i, center);
     // 특수 칸: 반대 색은 폭발, 같은 색은 명중하고 그대로 지나간다
     if (known && cell.special && cell.special !== color) return finish('wrong', i, center);
     if (known && cell.special && !hits.includes(i)) hits.push(i);

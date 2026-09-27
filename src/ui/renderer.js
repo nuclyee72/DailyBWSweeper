@@ -182,7 +182,7 @@ export function drawLasers(svg, board, traces) {
 /**
  * 칸 cellIdx의 거울을 켜고 끄면 어떻게 되는지 미리 보여준다.
  * 바뀌는 레이저는 지금 경로를 흐리게, 바뀐 경로를 점선으로. 켜질 거울은 점선, 꺼질 거울은 흐리게.
- * now/next는 보이는 정보만으로 계산한 경로 (board.previewToggle) — 숨은 지뢰는 드러나지 않는다.
+ * now/next는 보이는 정보와 내 지뢰 표시만으로 계산한 경로 (board.previewToggle) — 숨은 지뢰는 드러나지 않는다.
  */
 export function drawPreview(svg, board, cellIdx, now, next) {
   clearPreview(svg);
