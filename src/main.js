@@ -98,6 +98,7 @@ function showLanding() {
   landingScreen.classList.remove('hidden');
   landingMain.hidden = false;
   landingArchive.hidden = true;
+  $('landing-free').hidden = true;
   landingCard.classList.remove('landing-card--archive');
   refreshLandingCard();
 }
@@ -200,7 +201,6 @@ async function startDaily(modeId) {
 
 async function startFreePlay(modeId) {
   if (ui.generating) return;
-  closePanel($('freeplay-mode-modal'));
   const seed = `free:${Date.now()}:${Math.random()}`;
   const board = await generate(modeId, seed);
   openGame({ kind: 'free', modeId, date: '자유 연습', seed, board });
@@ -798,9 +798,13 @@ function init() {
 
   // 랜딩
   for (const btn of document.querySelectorAll('[data-daily]')) btn.addEventListener('click', () => startDaily(btn.dataset.daily));
-  $('btn-free-play').addEventListener('click', () => openPanel($('freeplay-mode-modal')));
+  // 자유 연습 모드 고르기 — 랜딩 카드 안에서 메인과 바꿔 보여 준다
+  $('btn-free-play').addEventListener('click', () => {
+    landingMain.hidden = true;
+    $('landing-free').hidden = false;
+  });
   for (const btn of document.querySelectorAll('[data-free]')) btn.addEventListener('click', () => startFreePlay(btn.dataset.free));
-  $('freeplay-close').addEventListener('click', () => closePanel($('freeplay-mode-modal')));
+  $('btn-free-back').addEventListener('click', backToMain);
   $('btn-landing-stats').addEventListener('click', () => openStatsModal('standard'));
   $('btn-landing-dark').addEventListener('click', () => setDark(!isDark()));
 
@@ -860,7 +864,7 @@ function init() {
   for (const el of document.querySelectorAll('[data-inverter-icon]')) el.innerHTML = INVERTER_SVG;
 
   // 모달 바깥(어두운 막)을 누르면 닫기
-  for (const id of ['daily-result-modal', 'game-help-modal', 'freeplay-mode-modal']) {
+  for (const id of ['daily-result-modal', 'game-help-modal']) {
     $(id).addEventListener('click', (e) => { if (e.target.id === id) closePanel($(id)); });
   }
   $('daily-stats-modal').addEventListener('click', (e) => { if (e.target.id === 'daily-stats-modal') closeStatsModal(); });
@@ -868,7 +872,7 @@ function init() {
   // 키보드: 1·2·3 입력 모드, Esc 모달 닫기
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      for (const id of ['daily-result-modal', 'game-help-modal', 'freeplay-mode-modal']) closePanel($(id));
+      for (const id of ['daily-result-modal', 'game-help-modal']) closePanel($(id));
       closeStatsModal();
       return;
     }

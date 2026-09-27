@@ -1068,9 +1068,14 @@ html, body {
 }
 
 
-/* 자유 연습 모드 창 */
-.freeplay-card { position: relative; width: min(340px, calc(100vw - 32px)); }
-.freeplay-card .daily-cards { margin-top: 4px; }
+/* 자유 연습 모드 고르기 (랜딩 카드 안) — 제목은 허브 카드의 .sub-title과 같다 */
+.landing-sub-title {
+  margin: 0;
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-given);
+}
 .daily-result-grid { font-size: 22px; letter-spacing: 2px; }
 
 /* ── 라이프 ── */

@@ -79,6 +79,22 @@
         </div>
       </div>
 
+      <!-- 자유 연습 모드 고르기 — 메인 카드 안에서 #landing-main 과 교체 표시. 고르면 바로 시작 -->
+      <div id="landing-free" class="landing-stack" hidden>
+        <h3 class="landing-sub-title">자유 연습 모드</h3>
+        <div class="daily-cards">
+          <button class="daily-card" type="button" data-free="standard">
+            <span class="daily-card-name">스탠다드</span>
+            <span class="daily-card-desc" data-desc="standard"></span>
+          </button>
+          <button class="daily-card" type="button" data-free="extended">
+            <span class="daily-card-name">익스텐디드</span>
+            <span class="daily-card-desc" data-desc="extended"></span>
+          </button>
+        </div>
+        <button id="btn-free-back" class="landing-btn" type="button">뒤로</button>
+      </div>
+
       <p class="landing-footer">
         <span>nuclyee</span><span aria-hidden="true">·</span><span>테스트 버전</span>
       </p>
@@ -213,24 +229,6 @@
         <p><strong>정답 보기</strong>게임이 끝나면(클리어·실패) 위쪽의 <b>정답 보기</b>로 풀이 하나를 볼 수 있어요. 정답이 여러 개일 수 있어서, 내 풀이와 달라도 괜찮아요.</p>
         <p><strong>데일리</strong>매일 아침 6시에 스탠다드·익스텐디드 퍼즐이 하나씩 바뀌어요. 누구에게나 같은 판이고, 한 번만 도전할 수 있어요.</p>
         <p><strong>화면</strong>휴대폰에서는 두 손가락으로 확대, 한 손가락으로 이동할 수 있어요.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- 자유 연습 모드 선택 -->
-  <div id="freeplay-mode-modal" class="modal-overlay">
-    <div class="modal-card freeplay-card">
-      <button id="freeplay-close" class="floating-panel-close" type="button" aria-label="닫기">✕</button>
-      <h2 class="floating-panel-title">자유 연습 모드</h2>
-      <div class="daily-cards">
-        <button class="daily-card" type="button" data-free="standard">
-          <span class="daily-card-name">스탠다드</span>
-          <span class="daily-card-desc" data-desc="standard"></span>
-        </button>
-        <button class="daily-card" type="button" data-free="extended">
-          <span class="daily-card-name">익스텐디드</span>
-          <span class="daily-card-desc" data-desc="extended"></span>
-        </button>
       </div>
     </div>
   </div>
