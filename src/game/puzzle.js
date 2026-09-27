@@ -46,6 +46,16 @@ export function modeDesc(mode) {
 /** 시드 문자열: 데일리·지난 퍼즐 'daily:standard:2026-09-27', 자유 연습 'free:…' */
 export const dailySeed = (modeId, date) => `daily:${modeId}:${date}`;
 
+/**
+ * 이 날짜부터의 데일리 · 지난 퍼즐과 모든 자유 연습은 처음 레이저 직선 위에 반전기를 두지 않는다.
+ * 그 전 날짜는 저장된 진행(칸 번호)이 그 판 기준이라 판을 예전 그대로 만든다.
+ */
+const INVERTER_OFF_LINES_FROM = '2026-09-29';
+function inverterOffLines(seed) {
+  const m = /^daily:[^:]+:(\d{4}-\d{2}-\d{2})$/.exec(seed);
+  return !m || m[1] >= INVERTER_OFF_LINES_FROM;
+}
+
 /** 시드로 판을 만든다. 반환한 판의 startIdx는 처음에 열어 둘 칸. */
 export function makeBoard(modeId, seed) {
   const mode = modeOf(modeId);
@@ -56,7 +66,7 @@ export function makeBoard(modeId, seed) {
   const x = 2 + Math.floor(rng() * (mode.cols - 4));
   const y = 2 + Math.floor(rng() * (mode.rows - 4));
   const startIdx = y * mode.cols + x;
-  placeContents(board, mode.mines, startIdx, rng, { maxRounds: 150 });
+  placeContents(board, mode.mines, startIdx, rng, { maxRounds: 150, inverterOffLines: inverterOffLines(seed) });
   board.startIdx = startIdx;
   return board;
 }

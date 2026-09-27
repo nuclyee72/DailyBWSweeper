@@ -182,10 +182,11 @@ export function createBoard(cols, rows, cfg, rng = Math.random) {
  *   used.actives(다른 경로가 켠 칸)에는 들어가지 않고, used.cells(다른 경로가 지나는 칸)는 켜지 않는다.
  * allowInvert=false면 반전기 칸을 벽으로 보고 반전기를 지나지 않는 경로만 찾는다 (반전기가 꼭 필요한지 검사할 때).
  * anyBlank=true면 아무 빈칸 하나에서 한 번 색을 바꿀 수 있다고 본다 (반전기 자리를 고를 때 — placed에 그 칸).
+ *   noPlace에 든 칸은 반전기 자리로 고르지 않는다.
  * 반환: { cells: 지나간 칸들, actives: 켜야 하는 거울 (발사기 쪽부터), inverts: 지난 반전기 수, placed } | null
  * (한 경로가 같은 칸을 두 번 지나며 서로 다른 선택을 하는 경우는 무시하는 근사 — verifySolution이 걸러낸다)
  */
-function findPath(board, em, targetIdx, used, { allowInvert = true, anyBlank = false } = {}) {
+function findPath(board, em, targetIdx, used, { allowInvert = true, anyBlank = false, noPlace = null } = {}) {
   const prev = new Map(); // key → { from, act: null | 'mirror' | 'invert' | 'place' }
   const queue = [[em.x, em.y, em.dir, 0, em.color, null, null]];
   let found = null;
@@ -223,7 +224,7 @@ function findPath(board, em, targetIdx, used, { allowInvert = true, anyBlank = f
       queue.push([x + DX[nd], y + DY[nd], nd, nextPassed, color, key, 'mirror']);
     }
     // 반전기 자리 고르기: 이 빈칸에 반전기를 둔다고 보고 색을 바꿔 본다 (한 번만)
-    if (free && anyBlank && color === em.color && isBlank(cell)) {
+    if (free && anyBlank && color === em.color && isBlank(cell) && !noPlace?.has(i)) {
       queue.push([x + DX[d], y + DY[d], d, nextPassed, flip(color), key, 'place']);
     }
   }
@@ -283,10 +284,12 @@ function flipTargets(board, mismatch, rng) {
  * 색 반전기를 빈칸에 놓는다.
  * 반대 색 목표마다, 그 짝 레이저가 지나가며 색을 바꿔 목표까지 갈 수 있는 빈칸을 골라 반전기로 삼는다
  * (무작위 빈칸에 두면 쓸 수 있는 자리에 놓일 일이 드물다). 남는 개수는 아무 빈칸에나.
+ * banned에 든 칸(처음 레이저 직선)에는 놓지 않는다 — 시작부터 레이저가 반전기를 지나 색이 바뀌어 있지 않게.
  * 반환: 모든 반대 색 목표에 쓸 반전기를 놓았으면 true
  */
-function placeInverters(board, count, rng) {
-  const blanks = shuffle(board.cells.map((c, i) => i).filter((i) => isBlank(board.cells[i])), rng);
+function placeInverters(board, count, rng, banned = null) {
+  const blanks = shuffle(board.cells.map((c, i) => i).filter((i) => isBlank(board.cells[i])), rng)
+    .filter((i) => !banned?.has(i));
   const none = { cells: new Set(), actives: new Set() };
   board.inverterIdxs = [];
 
@@ -294,7 +297,7 @@ function placeInverters(board, count, rng) {
   for (const { emitter, specialIdx } of mismatched) {
     if (board.inverterIdxs.length >= count) return false;
     // 아무 빈칸에서나 한 번 색을 바꿀 수 있다고 보고 경로를 찾은 뒤, 실제로 색을 바꾼 칸을 반전기로
-    const path = findPath(board, emitter, specialIdx, none, { anyBlank: true });
+    const path = findPath(board, emitter, specialIdx, none, { anyBlank: true, noPlace: banned });
     const spot = path?.placed[0];
     if (spot === undefined) return false;
     board.cells[spot].inverter = true;
@@ -402,21 +405,22 @@ function findSafeOrder(board, activeIdxs) {
  * - 반전기를 꼭 써야 하고, 검증된 풀이가 있는 판이 나올 때까지 다시 뽑는다.
  *   발사기 배치가 풀이 가능성을 크게 좌우하므로 몇 번 안 되면 발사기 위치까지 다시 뽑는다.
  * - 시간 안에 못 찾으면 마지막으로 "반전기 필수" 조건을 빼고 만든다 (풀 수 없는 판은 내지 않는다).
+ * - inverterOffLines면 발사기의 처음 직선 경로에는 반전기도 두지 않는다 (예전 데일리 판을 그대로 두려고 옵션).
  */
-export function placeContents(board, mineCount, firstClickIdx, rng = Math.random, { maxRounds = 0 } = {}) {
+export function placeContents(board, mineCount, firstClickIdx, rng = Math.random, { maxRounds = 0, inverterOffLines = false } = {}) {
   // maxRounds를 주면 시간 대신 횟수로 끊는다 — 데일리처럼 누가 만들어도 같은 판이 나와야 할 때 (기기 속도와 무관)
   const deadline = Date.now() + 3000;
   const more = (round) => (maxRounds ? round < maxRounds : Date.now() < deadline);
   for (let round = 0; more(round); round++) {
     if (round > 0) board.emitters = chooseEmitters(board.cols, board.rows, board.cfg.lasers, rng);
-    placeContentsOnce(board, mineCount, firstClickIdx, rng);
+    placeContentsOnce(board, mineCount, firstClickIdx, rng, inverterOffLines);
     if (board.solvable) return;
   }
   const strict = board.cfg;
   board.cfg = { ...strict, mismatch: 0 };
   for (let round = 0; round < 20 && !board.solvable; round++) {
     board.emitters = chooseEmitters(board.cols, board.rows, board.cfg.lasers, rng);
-    placeContentsOnce(board, mineCount, firstClickIdx, rng);
+    placeContentsOnce(board, mineCount, firstClickIdx, rng, inverterOffLines);
   }
   board.cfg = strict;
 }
@@ -448,7 +452,7 @@ export function isBlank(cell) {
   return !cell.isMine && !cell.special && cell.countBlack === 0 && cell.countWhite === 0;
 }
 
-function placeContentsOnce(board, mineCount, firstClickIdx, rng) {
+function placeContentsOnce(board, mineCount, firstClickIdx, rng, inverterOffLines) {
   const { lasers, mismatch, inverters } = board.cfg;
   const firstX = firstClickIdx % board.cols;
   const firstY = Math.floor(firstClickIdx / board.cols);
@@ -493,7 +497,7 @@ function placeContentsOnce(board, mineCount, firstClickIdx, rng) {
     // mismatch개를 반대 색으로 바꾼다 — 반대 색으로 바꿔도 그 색 레이저가 반전기 없이는 못 맞히는 것 중에서
     if (!flipTargets(board, mismatch, rng)) continue;
     if (mismatch > 0 && !inverterRequired(board)) continue;
-    if (!placeInverters(board, inverters, rng)) continue;
+    if (!placeInverters(board, inverters, rng, inverterOffLines ? lineCells : null)) continue;
     board.solution = solve(board, rng);
     board.solvable = board.solution !== null;
     if (board.solvable) break;

@@ -393,11 +393,11 @@ html, body {
 .ds-cell.is-marked .ds-icon { font-size: 0.9em; }
 .ds-cell.mark-black .ds-icon {
   color: var(--tri-black-text);
-  background: radial-gradient(circle, var(--tri-black-bg) 0 34%, transparent 36%);
+  background: radial-gradient(circle, var(--tri-black-bg) 0 54%, transparent 56%);
 }
 .ds-cell.mark-white .ds-icon {
   color: var(--tri-white-text);
-  background: radial-gradient(circle, var(--tri-white-bg) 0 32%, rgba(var(--text-given-rgb), 0.35) 32% 35%, transparent 37%);
+  background: radial-gradient(circle, var(--tri-white-bg) 0 52%, rgba(var(--text-given-rgb), 0.35) 52% 55%, transparent 57%);
 }
 
 /* 지뢰 공개 — 칸 전체를 그 지뢰 색으로 */
@@ -491,15 +491,6 @@ html, body {
 .kp-btn:hover { box-shadow: 0 4px 10px rgba(20, 24, 40, 0.14); }
 .kp-btn:active { transform: scale(0.94); }
 .kp-btn.active { background: var(--cell-selected); color: var(--text-sel); box-shadow: inset 0 0 0 2px var(--text-input); }
-
-.controls-hint {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  text-align: center;
-  color: rgba(var(--text-given-rgb), 0.45);
-}
-@media (pointer: coarse) { .controls-hint { display: none; } }
 
 /* 1·2 모드(지뢰찾기)에서는 레이저를 흐리게 (흐르는 움직임은 보이게) — 3 모드(거울)에서만 또렷하게 */
 .game-screen:not(.mode-laser) .lasers-main .laser { opacity: 0.26; }

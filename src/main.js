@@ -350,7 +350,7 @@ function onCellClick(i) {
     const boom = board.emitters.map((em) => traceLaser(board, em)).find((t) => BOOM_ENDS.has(t.end));
     if (boom && session.lives > 1) {
       cell.active = !cell.active;
-      loseLife(boom.cellIdx, boom.end === 'wrong' ? 'wrongTarget' : 'laser', boom.emitter.color);
+      loseLife(boom.cellIdx);
       return;
     }
     if (boom) session.lives = 0;
@@ -367,7 +367,7 @@ function onCellClick(i) {
 
   // 지뢰를 열면: 라이프가 남아 있으면 열지 않은 것으로 하고, 그 칸이 무슨 색 지뢰인지 알려 준다
   if (cell.isMine && session.lives > 1) {
-    loseLife(i, 'mine');
+    loseLife(i);
     return;
   }
   if (cell.isMine) session.lives = 0;
@@ -394,7 +394,7 @@ function onCellClick(i) {
  *   지뢰를 열었거나 레이저가 지뢰에 닿았으면 그 칸을 "알아낸 지뢰"로 드러내고,
  *   레이저가 반대 색 특수 칸에 닿았으면 그 특수 칸을 연다.
  */
-function loseLife(cellIdx, kind, laserColor = null) {
+function loseLife(cellIdx) {
   const { board } = session;
   const cell = board.cells[cellIdx];
   session.lives -= 1;
@@ -406,14 +406,7 @@ function loseLife(cellIdx, kind, laserColor = null) {
   el.classList.remove('is-life-lost');
   void el.offsetWidth; // 애니메이션 다시 시작
   el.classList.add('is-life-lost');
-
-  const colorName = (c) => (c === 'black' ? '검' : '흰');
-  const what = {
-    mine: `${colorName(cell.mineColor)} 지뢰였어요`,
-    laser: `${colorName(laserColor)} 레이저가 ${colorName(cell.mineColor)} 지뢰에 닿았어요 — 거울을 되돌렸어요`,
-    wrongTarget: `${colorName(laserColor)} 레이저가 ${colorName(cell.special)} 특수 칸에 닿았어요 — 거울을 되돌렸어요`,
-  }[kind];
-  showToast(`💔 라이프 -1 · ${what}`);
+  showToast('💔 라이프 -1');
   persist();
 }
 
@@ -497,7 +490,7 @@ function showAnswer() {
   drawLasers(laserSvg, ans, traces);
   updateHighlight();
   $('btn-view-answer').textContent = '내 판 보기';
-  $('ds-mode-label').textContent = `${baseLabel()} · 정답 (여러 풀이 중 하나)`;
+  $('ds-mode-label').textContent = `${baseLabel()} · 정답`;
 }
 
 function hideAnswer() {
@@ -513,20 +506,13 @@ function hideAnswer() {
 }
 
 // ── 결과 모달 ──
-const LOST_REASON = {
-  mine: '라이프를 모두 잃었어요 — 마지막에 지뢰를 밟았어요.',
-  laser: '라이프를 모두 잃었어요 — 마지막에 같은 색 레이저가 지뢰에 닿았어요.',
-  wrongTarget: '라이프를 모두 잃었어요 — 마지막에 레이저가 반대 색 특수 칸에 닿았어요.',
-};
-
 function showResultModal() {
   if (!session?.finished) return;
   const mode = modeOf(session.modeId);
   const result = targetResult();
   $('daily-result-title').textContent = result.won ? '🎯 클리어!' : '💥 게임 오버';
   const note = session.kind === 'daily' ? '' : ' (기록에는 반영되지 않아요)';
-  const reason = result.won ? '' : `\n${LOST_REASON[session.lostBy] ?? ''}`;
-  $('daily-result-detail').textContent = `${mode.label} · ${whereLabel(session)}\n${buildSummaryLine(result)}${note}${reason}`;
+  $('daily-result-detail').textContent = `${mode.label} · ${whereLabel(session)}\n${buildSummaryLine(result)}${note}`;
   $('daily-result-grid').textContent = buildTargetRow(result);
   $('daily-share-note').textContent = '';
   openPanel($('daily-result-modal'));
