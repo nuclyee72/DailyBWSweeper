@@ -600,6 +600,7 @@ export function countMarks(board, mark) {
  * points: 구간을 이은 전체 꺾은선
  * end: 'exit' 판 밖으로 | 'mine' 같은 색 지뢰 폭발 | 'wrong' 반대 색 특수 칸 폭발
  * hits: 지나간 같은 색 특수 칸들 (명중). 레이저는 특수 칸에서 멈추지 않으므로 끝점으로 위치를 알 수 없다.
+ * cells: 지나간 칸들 (레이저 강조 표시용)
  * visibleOnly: 플레이어에게 보이는 정보(켜진 거울, 열린 칸 — 반전기는 레이저 색이 바뀌는 게 늘 보이므로 포함)만으로 따라간다 — 미리보기용.
  *   안 연 칸의 지뢰·특수 칸을 무시하므로 숨은 정보가 새지 않는다.
  */
@@ -611,12 +612,13 @@ export function traceLaser(board, em, { visibleOnly = false } = {}) {
   let seg = { color, points: [[x + 0.5 - DX[d] * 0.8, y + 0.5 - DY[d] * 0.8]] };
   const segments = [seg];
   const hits = [];
+  const cells = [];
   const maxSteps = board.cols * board.rows * 8 + 4;
 
   const finish = (end, cellIdx, last) => {
     seg.points.push(last);
     const points = segments.flatMap((s, k) => (k === 0 ? s.points : s.points.slice(1)));
-    return { emitter: em, segments, points, end, cellIdx, hits };
+    return { emitter: em, segments, points, end, cellIdx, hits, cells };
   };
 
   for (let step = 0; step < maxSteps && inBounds(board, x, y); step++) {
@@ -624,6 +626,7 @@ export function traceLaser(board, em, { visibleOnly = false } = {}) {
     const cell = board.cells[i];
     const center = [x + 0.5, y + 0.5];
     const known = !visibleOnly || cell.revealed;
+    cells.push(i);
 
     // 같은 색 지뢰는 폭발, 반대 색 지뢰는 그대로 지나간다
     if (known && cell.isMine && cell.mineColor === color) return finish('mine', i, center);

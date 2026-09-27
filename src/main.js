@@ -22,6 +22,7 @@ import {
   drawLasers,
   drawPreview,
   clearPreview,
+  highlightLasers,
   INVERTER_SVG,
 } from './ui/renderer.js';
 import { createMarkPalette } from './ui/markPalette.js';
@@ -55,7 +56,7 @@ const laserSvg = $('laser-layer');
  *   finished: boolean, lostBy: string|null, explodedIdx: number, lives: number } | null}
  */
 let session = null;
-const ui = { inputMode: 'open', hoverIdx: -1, generating: false };
+const ui = { inputMode: 'open', hoverIdx: -1, touchIdx: -1, generating: false };
 let palette = null;
 let zoom = null;
 let timerId = 0;
@@ -285,6 +286,7 @@ function refresh() {
   renderExploded();
   drawLasers(laserSvg, board, traces);
   updatePreview();
+  updateHighlight();
   updateHud();
 
   if (newlyOver) finish(board.won ? null : hitKind === 'wrong' ? 'wrongTarget' : 'laser');
@@ -325,6 +327,7 @@ function setInputMode(mode) {
   }
   for (const m of ['open', 'mark', 'laser']) gameScreen.classList.toggle(`mode-${m}`, m === mode);
   updatePreview();
+  updateHighlight();
 }
 
 function onCellClick(i) {
@@ -442,6 +445,19 @@ function setHover(i) {
   if (ui.hoverIdx === i) return;
   ui.hoverIdx = i;
   updatePreview();
+  updateHighlight();
+}
+
+/** 거울 모드에서 마우스를 올린(터치는 누르고 있는) 칸을 지나가는 레이저를 노랗게 */
+function updateHighlight() {
+  const i = ui.hoverIdx >= 0 ? ui.hoverIdx : ui.touchIdx;
+  if (!session || ui.inputMode !== 'laser' || i < 0) {
+    highlightLasers(laserSvg, []);
+    return;
+  }
+  const ks = [];
+  session.traces.forEach((t, k) => { if (t.cells?.includes(i)) ks.push(k); });
+  highlightLasers(laserSvg, ks);
 }
 
 // ── 결과 모달 ──
@@ -676,6 +692,20 @@ function init() {
     setHover(cell ? Number(cell.dataset.idx) : -1);
   });
   grid.addEventListener('pointerleave', () => setHover(-1));
+  // 터치: 누르고 있는 동안 그 칸을 지나는 레이저 강조
+  grid.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const cell = e.target.closest('.ds-cell');
+    ui.touchIdx = cell ? Number(cell.dataset.idx) : -1;
+    updateHighlight();
+  });
+  const endTouch = (e) => {
+    if (e.pointerType !== 'touch' || ui.touchIdx < 0) return;
+    ui.touchIdx = -1;
+    updateHighlight();
+  };
+  window.addEventListener('pointerup', endTouch);
+  window.addEventListener('pointercancel', endTouch);
 
   palette = createMarkPalette(document.querySelector('.board-stage'), onMarkPicked);
   // 터치: 두 손가락 확대, 한 손가락 이동. 확대돼 있으면 '맞춤' 버튼
@@ -692,6 +722,7 @@ function init() {
     if (!session) return;
     drawLasers(laserSvg, session.board, session.traces);
     updatePreview();
+    updateHighlight();
   });
 
   // 입력 모드

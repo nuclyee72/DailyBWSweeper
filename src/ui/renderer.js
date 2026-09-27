@@ -214,6 +214,12 @@ export function drawPreview(svg, board, cellIdx, now, next) {
   });
 }
 
+/** 레이저 강조: emitterIdxs 번째 레이저만 노랗게 (나머지는 원래대로) */
+export function highlightLasers(svg, emitterIdxs) {
+  const on = new Set(emitterIdxs.map(String));
+  for (const g of svg.querySelectorAll('.lasers-main .laser')) g.classList.toggle('is-hl', on.has(g.dataset.em));
+}
+
 export function clearPreview(svg) {
   svg.querySelector('.lasers-preview')?.replaceChildren();
   svg.querySelectorAll('.lasers-main .is-dimmed').forEach((el) => el.classList.remove('is-dimmed'));

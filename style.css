@@ -40,6 +40,7 @@
   --laser-black-halo:   rgba(255, 255, 255, 0.8);
   --laser-white-core:   #ffffff;
   --laser-white-halo:   rgba(35, 39, 51, 0.5);
+  --laser-hl:           #f2b705;  /* 레이저 강조 (노랑) */
 }
 
 [data-theme="dark"] {
@@ -80,6 +81,7 @@
   --laser-black-halo:   rgba(185, 190, 200, 0.55);
   --laser-white-core:   #d4d8df;
   --laser-white-halo:   rgba(0, 0, 0, 0.6);
+  --laser-hl:           #ffd23f;
 }
 
 /* ── 기본 ── */
@@ -433,9 +435,8 @@ html, body {
 .laser-black .laser-emitter { fill: var(--laser-black-core); stroke: var(--laser-black-halo); }
 .laser-white .laser-emitter { fill: var(--laser-white-core); stroke: var(--laser-white-halo); }
 .laser-boom { fill: none; stroke: var(--conflict); stroke-width: 0.1; }
-/* 레이저는 늘 발사기에서 바깥쪽으로 흐른다 (끊긴 선이 움직임). 연 특수 칸에 명중한 레이저는 더 빠르게 */
+/* 레이저는 늘 발사기에서 바깥쪽으로 흐른다 (끊긴 선이 움직임) */
 .lasers-main .laser-core { stroke-dasharray: 0.3 0.14; animation: laser-flow 0.9s linear infinite; }
-.lasers-main .laser-lit .laser-core { animation-duration: 0.45s; }
 @keyframes laser-flow { to { stroke-dashoffset: -0.44; } }
 @media (prefers-reduced-motion: reduce) { .lasers-main .laser-core { animation: none; } }
 .mirror { stroke: var(--mirror); stroke-width: 0.1; stroke-linecap: round; }
@@ -499,6 +500,12 @@ html, body {
 
 /* 1·2 모드(지뢰찾기)에서는 레이저를 흐리게 (흐르는 움직임은 보이게) — 3 모드(거울)에서만 또렷하게 */
 .game-screen:not(.mode-laser) .lasers-main .laser { opacity: 0.26; }
+/* 도착한 레이저(연 특수 칸에 명중) — 할 일이 끝났으니 흐리게 */
+.game-screen.mode-laser .lasers-main .laser.laser-lit { opacity: 0.3; }
+.game-screen:not(.mode-laser) .lasers-main .laser.laser-lit { opacity: 0.1; }
+/* 거울 모드에서 마우스를 올린(누른) 칸을 지나는 레이저 — 노랗게 강조 */
+.game-screen .lasers-main .laser.is-hl { opacity: 1 !important; }
+.lasers-main .laser.is-hl .laser-halo { stroke: var(--laser-hl); stroke-width: 0.22; }
 .game-screen:not(.mode-laser) .lasers-main .mirror { opacity: 0.45; }
 
 /* ── 좁은 화면: 판은 가운데, 패널은 아래에 붙는 시트 (스도쿠 모바일 세로와 같은 방식) ── */
