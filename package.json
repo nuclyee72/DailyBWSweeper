@@ -1,0 +1,10 @@
+{
+  "name": "daily-bw-sweeper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "흑백 지뢰찾기 — 검/흰 지뢰를 따로 세고 레이저를 거울로 꺾어 특수 칸을 맞히는 데일리 퍼즐 (정적 사이트)",
+  "scripts": {
+    "dev": "node scripts/serve.mjs"
+  }
+}

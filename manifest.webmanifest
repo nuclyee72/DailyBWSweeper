@@ -1,0 +1,11 @@
+{
+  "name": "흑백 지뢰찾기",
+  "short_name": "흑백 지뢰찾기",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2f9e60",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
