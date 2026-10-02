@@ -1,8 +1,18 @@
 /**
  * share.js — 결과 공유 텍스트 + 월별 달력 공유 (DailyWordship/src/daily/share.js와 같은 방식).
+ *
+ * 공유 텍스트 형식 (ProjectDaily 네 게임 공통 — 제목 · 결과 줄 · 그림 · 허브 링크):
+ *   데일리 흑백 지뢰찾기 · 스탠다드 · 2026-10-02
+ *   ✅ 🎯 3/3 · ⏱ 4:12 · ❤️ 4
+ *   (빈 줄)
+ *   🟩🟩🟩
+ *   (빈 줄)
+ *   <허브 링크>
  */
 
 export const GAME_TITLE = '데일리 흑백 지뢰찾기';
+/** 공유 링크 — 허브의 이 게임 카드 (네 게임 공통) */
+export const SHARE_URL = 'https://nuclyee72.github.io/ProjectDaily/#bwsweeper';
 
 /** 초 → 'm:ss' */
 export function formatSeconds(sec) {
@@ -18,15 +28,15 @@ export function buildTargetRow({ total, hit }) {
   return '🟩'.repeat(hit) + '⬛'.repeat(Math.max(0, total - hit));
 }
 
-/** 결과 요약 한 줄 — '🎯 3/3 · ⏱ 4:12 · ❤️ 4' (실패면 💥, 예전 기록엔 라이프가 없다) */
+/** 결과 요약 한 줄 — '✅ 🎯 3/3 · ⏱ 4:12 · ❤️ 4' (실패면 ❌ 💥, 예전 기록엔 라이프가 없다) */
 export function buildSummaryLine({ won, total, hit, seconds, lives }) {
   const life = lives == null ? '' : ` · ❤️ ${lives}`;
-  return `${won ? '🎯' : '💥'} ${hit}/${total} · ⏱ ${formatSeconds(seconds)}${life}`;
+  return `${won ? '✅ 🎯' : '❌ 💥'} ${hit}/${total} · ⏱ ${formatSeconds(seconds)}${life}`;
 }
 
 /** 공유용 전체 텍스트. title 예: '데일리 흑백 지뢰찾기 · 스탠다드 · 2026-09-27' */
 export function buildShareText({ title, result }) {
-  return [title, buildSummaryLine(result), buildTargetRow(result), ''].join('\n');
+  return [title, buildSummaryLine(result), '', buildTargetRow(result), '', SHARE_URL].join('\n');
 }
 
 const CAL_EMOJI = { solved: '🟩', fail: '🟥', miss: '⬜', pad: '⬛' };
@@ -53,5 +63,5 @@ export function buildCalendarShareText({ results, year, month, label = '' }) {
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7).join(''));
 
   const head = `${GAME_TITLE}${label ? ` · ${label}` : ''} · ${year}-${String(month).padStart(2, '0')}`;
-  return [head, `✅ ${wins}  ❌ ${fails}`, '', ...rows, ''].join('\n');
+  return [head, `✅ ${wins}  ❌ ${fails}`, '', ...rows, '', SHARE_URL].join('\n');
 }
