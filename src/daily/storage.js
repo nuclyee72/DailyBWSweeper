@@ -61,7 +61,7 @@ export function recordResult(date, status, seconds, mode) {
 
 // ── 집계 (통계창) ──
 
-/** 완성 시간 분포 구간 이름 — distBounds(분) [2,4,6,10,15] → '~2분' '2~4분' … '15분~' '실패' */
+/** 완성 시간 분포 구간 이름 — distBounds(분) [10,12,…,20] → '~10분' '10~12분' … '18~20분' '20분~' '실패' */
 export function distBuckets(mode) {
   const bounds = modeOf(mode).distBounds;
   return [

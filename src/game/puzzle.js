@@ -10,6 +10,9 @@ import { rngFromSeed } from '../core/random.js';
  * lasers = 레이저(= 특수 칸) 수, mismatch = 반전기로만 맞힐 수 있게 보장하는 반대 색 목표 수,
  * inverters = 색 반전기 수, lives = 라이프(실수 허용 횟수), distBounds = 통계 완성 시간 분포 구간(분)
  */
+/** 통계 완성 시간 분포 — '~10분', 10~20분은 2분씩 5구간, '20분~' (두 모드 같이) */
+const DIST_BOUNDS = [10, 12, 14, 16, 18, 20];
+
 export const MODES = {
   standard: {
     id: 'standard',
@@ -21,7 +24,7 @@ export const MODES = {
     mismatch: 1,
     inverters: 1,
     lives: 5,
-    distBounds: [2, 4, 6, 10, 15],
+    distBounds: DIST_BOUNDS,
   },
   extended: {
     id: 'extended',
@@ -33,7 +36,7 @@ export const MODES = {
     mismatch: 1,
     inverters: 2,
     lives: 5,
-    distBounds: [4, 7, 10, 15, 25],
+    distBounds: DIST_BOUNDS,
   },
 };
 

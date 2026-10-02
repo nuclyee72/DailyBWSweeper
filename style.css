@@ -858,7 +858,7 @@ html, body {
 
 .help-legend { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
 
-.daily-stats-card { width: min(360px, calc(100vw - 32px)); position: relative; }
+.daily-stats-card { width: min(360px, calc(100vw - 32px)); position: relative; max-height: calc(100dvh - 24px); overflow-y: auto; } /* 낮은 화면(iPhone SE)에선 창 안에서 스크롤 */
 
 .daily-stats-numbers { display: flex; justify-content: space-between; margin-bottom: 20px; }
 
