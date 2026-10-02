@@ -19,6 +19,7 @@ export function buildBoardDom(container, board) {
     btn.type = 'button';
     btn.className = 'ds-cell';
     btn.dataset.idx = String(i);
+    btn.tabIndex = -1; // 키보드는 방향키 커서로 다룬다 (Tab으로 칸 256개를 지나가지 않게)
 
     const nBlack = document.createElement('span');
     nBlack.className = 'ds-n ds-n-black';

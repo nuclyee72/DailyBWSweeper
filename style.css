@@ -41,6 +41,10 @@
   --laser-white-core:   #ffffff;
   --laser-white-halo:   rgba(35, 39, 51, 0.5);
   --laser-hl:           rgba(242, 183, 5, 0.5);  /* 레이저 강조 (옅은 노랑) */
+  --mode-mark:          #d9772b;  /* 표시 모드 (판 테두리 · 버튼) */
+  --mode-mark-bg:       #fbe6d3;
+  --mode-mark-text:     #a65314;
+  --pending:            #e8a400;  /* 터치 확정 대기 칸 */
 }
 
 [data-theme="dark"] {
@@ -82,6 +86,10 @@
   --laser-white-core:   #d4d8df;
   --laser-white-halo:   rgba(0, 0, 0, 0.6);
   --laser-hl:           rgba(255, 210, 63, 0.45);
+  --mode-mark:          #f0964d;
+  --mode-mark-bg:       #4a3222;
+  --mode-mark-text:     #ffc08a;
+  --pending:            #ffd23f;
 }
 
 /* ── 기본 ── */
@@ -307,11 +315,12 @@ html, body {
 }
 
 /* 판 둘레 여백 = 판 밖 레이저 발사기 자리 */
-.board-area { position: relative; flex: 0 0 auto; padding: 30px; }
+.board-area { position: relative; flex: 0 0 auto; padding: 30px; touch-action: none; }
 
 .board-stage {
   position: relative;
   transform-origin: 0 0;
+  will-change: transform;
   width: min(calc(100dvh - 170px), calc(100vw - 200px - 32px - 32px - 60px), 640px);
 }
 
@@ -327,7 +336,11 @@ html, body {
   background: var(--grid-line);
   box-shadow: 0 0 28px var(--board-glow), 0 24px 48px rgba(20, 24, 40, 0.14);
   touch-action: manipulation;
+  transition: border-color 0.15s ease;
 }
+/* 판 테두리 색 = 지금 입력 모드 (표시 주황 · 거울 초록) — 아래 패널을 안 봐도 알 수 있게 */
+.game-screen.mode-mark .board-grid { border-color: var(--mode-mark); }
+.game-screen.mode-laser .board-grid { border-color: var(--mirror); }
 
 .ds-cell {
   position: relative;
@@ -345,6 +358,7 @@ html, body {
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   transition: background 0.12s ease;
 }
 .ds-cell:hover { background: var(--unopened-hover); }
@@ -491,16 +505,18 @@ html, body {
 .kp-btn:hover { box-shadow: 0 4px 10px rgba(20, 24, 40, 0.14); }
 .kp-btn:active { transform: scale(0.94); }
 .kp-btn.active { background: var(--cell-selected); color: var(--text-sel); box-shadow: inset 0 0 0 2px var(--text-input); }
+.kp-btn[data-input-mode="mark"].active { background: var(--mode-mark-bg); color: var(--mode-mark-text); box-shadow: inset 0 0 0 2px var(--mode-mark); }
 
 /* 1·2 모드(지뢰찾기)에서는 레이저를 흐리게 (흐르는 움직임은 보이게) — 3 모드(거울)에서만 또렷하게 */
-.game-screen:not(.mode-laser) .lasers-main .laser { opacity: 0.26; }
+.game-screen:not(.mode-laser):not(.is-shift) .lasers-main .laser { opacity: 0.26; }
 /* 도착한 레이저(연 특수 칸에 명중) — 할 일이 끝났으니 흐리게 */
-.game-screen.mode-laser .lasers-main .laser.laser-lit { opacity: 0.3; }
-.game-screen:not(.mode-laser) .lasers-main .laser.laser-lit { opacity: 0.1; }
+.game-screen.mode-laser .lasers-main .laser.laser-lit,
+.game-screen.is-shift .lasers-main .laser.laser-lit { opacity: 0.3; }
+.game-screen:not(.mode-laser):not(.is-shift) .lasers-main .laser.laser-lit { opacity: 0.1; }
 /* 거울 모드에서 마우스를 올린(누른) 칸을 지나는 레이저 — 노랗게 강조 */
 .game-screen .lasers-main .laser.is-hl { opacity: 1 !important; }
 .lasers-main .laser.is-hl .laser-halo { stroke: var(--laser-hl); stroke-width: 0.16; }
-.game-screen:not(.mode-laser) .lasers-main .mirror { opacity: 0.45; }
+.game-screen:not(.mode-laser):not(.is-shift) .lasers-main .mirror { opacity: 0.45; }
 
 /* ── 좁은 화면: 판은 가운데, 패널은 아래에 붙는 시트 (스도쿠 모바일 세로와 같은 방식) ── */
 @media (max-width: 760px) {
@@ -514,12 +530,12 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px 28px;
-    touch-action: none; /* 핀치·끌기는 직접 처리 (브라우저 확대/스크롤 대신) */
+    padding: 12px 14px; /* 좌우는 판 밖 레이저 발사기(칸 반 개) 자리만큼만 */
+    container-type: size; /* 판 크기를 남은 자리에 맞춘다 (아래 cqw·cqh) */
   }
   /* 확대 중에만 잘라낸다 — 확대한 판이 아래 패널 위로 넘치지 않게 (평소엔 가장자리 칸의 표시 팔레트가 보이도록) */
   .board-area.is-zoomed { overflow: hidden; }
-  .board-stage { width: min(calc(100vw - 60px), calc(100dvh - 290px)); }
+  .board-stage { width: min(100cqw, 100cqh); }
   .side-panel {
     width: 100%;
     flex-direction: row;
@@ -530,30 +546,22 @@ html, body {
   }
   .sp-group:first-child { flex: 2; }
   .sp-group:nth-child(2) { flex: 1; }
+  .sp-zoom-group { flex: 0.9; }
+  /* 버튼 위 이름표는 빼서 판 자리를 넓힌다 (모드는 판 테두리 색으로도 보인다) */
+  .sp-group-label { display: none; }
   .sp-pair { gap: 6px; }
-  .kp-btn { height: 46px; font-size: 14px; }
+  .kp-btn { height: 48px; font-size: 14px; padding: 0 4px; white-space: nowrap; }
+}
+@media (max-width: 380px) {
+  .kp-btn { font-size: 13px; }
+  .sp-zoom-group { flex: 0.55; }
+  .zoom-txt { display: none; }
 }
 
-/* ── 확대 중일 때 판 오른쪽 위 '맞춤' 버튼 ── */
-.btn-fit {
-  position: absolute;
-  top: max(10px, env(safe-area-inset-top));
-  right: 12px;
-  z-index: 8;
-  height: 34px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(var(--glass-rgb), 0.9);
-  color: var(--text-given);
-  font-family: 'Outfit', 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 4px 14px rgba(20, 24, 40, 0.18);
-  cursor: pointer;
-  display: none;
-}
-.btn-fit.show { display: block; }
+/* ── 확대 버튼: 터치 화면에서만 (마우스는 판이 한눈에 들어오고 끌어서 옮길 수 없다) ── */
+.sp-zoom-group { display: none; }
+@media (any-pointer: coarse) { .sp-zoom-group { display: flex; } }
+.board-stage.is-zoom-anim { transition: transform 0.22s ease; }
 
 /* ── 토스트 (DailySudoku와 같음) ── */
 .toast {
@@ -634,19 +642,20 @@ html, body {
 .modal-btn-primary:hover { background: var(--text-sel); }
 
 /* ── 표시 팔레트: 칸 둘레 잘린 도넛 (12시 → 5시) ── */
-/* 판(.board-stage)이 확대되면 transform 때문에 fixed가 판 기준이 되므로, 판 기준으로 넉넉히 덮는다 */
-.mark-backdrop { position: absolute; inset: -4000px; z-index: 5; }
+/* 화면 좌표에 띄운다 — 판을 확대해도 잘리지 않고 크기가 일정하다 */
+.mark-backdrop { position: fixed; inset: 0; z-index: 50; touch-action: none; }
 .mark-palette {
-  position: absolute;
-  z-index: 6;
+  position: fixed;
+  z-index: 51;
   overflow: visible;
   pointer-events: none;
+  touch-action: none;
   opacity: 0;
-  transform: scale(calc(0.6 * var(--pal-scale, 1)));
+  transform: scale(0.6);
   transition: opacity 0.12s ease, transform 0.14s ease;
   filter: drop-shadow(0 6px 14px rgba(20, 24, 40, 0.25));
 }
-.mark-palette.is-open { opacity: 1; transform: scale(var(--pal-scale, 1)); }
+.mark-palette.is-open { opacity: 1; transform: none; }
 .mark-option { pointer-events: auto; cursor: pointer; }
 .mark-sector {
   fill: rgba(var(--glass-rgb), 0.96);
@@ -656,8 +665,12 @@ html, body {
 }
 .mark-option-black .mark-sector { fill: var(--tri-black-bg); }
 .mark-option-white .mark-sector { fill: var(--tri-white-bg); }
-.mark-option:hover .mark-sector { filter: brightness(0.88); }
-[data-theme="dark"] .mark-option:hover .mark-sector { filter: brightness(1.35); }
+.mark-option:hover .mark-sector,
+.mark-option.is-hover .mark-sector { filter: brightness(0.88); }
+[data-theme="dark"] .mark-option:hover .mark-sector,
+[data-theme="dark"] .mark-option.is-hover .mark-sector { filter: brightness(1.35); }
+/* 누른 채 끄는 중 손가락 아래 조각 */
+.mark-option.is-hover .mark-sector { stroke: var(--mode-mark); stroke-width: 3; }
 .mark-option.is-current .mark-sector { stroke: var(--mirror); stroke-width: 2.5; }
 .mark-glyph { font-family: 'Outfit', 'Inter', sans-serif; font-weight: 700; pointer-events: none; paint-order: stroke; stroke-linejoin: round; }
 .mark-glyph-black { fill: var(--tri-black-text); }
@@ -1074,8 +1087,8 @@ html, body {
 .ds-status-lives strong { font-size: 18px; color: var(--text-given); font-variant-numeric: tabular-nums; }
 .ds-heart { color: var(--conflict); font-size: 15px; }
 .ds-status-lives.is-low strong { color: var(--conflict); }
-.life-toast { bottom: 96px; max-width: calc(100vw - 32px); text-align: center; font-size: 14px; }
-@media (max-width: 760px) { .life-toast { bottom: 150px; } }
+.life-toast { bottom: 96px; max-width: calc(100vw - 32px); text-align: center; font-size: 14px; word-break: keep-all; white-space: nowrap; }
+@media (max-width: 760px) { .life-toast { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); } }
 /* 실수로 알아낸 지뢰 — 게임은 계속되므로 폭발 표시 대신 옅은 빨간 테두리 */
 .ds-cell.is-known { box-shadow: inset 0 0 0 2px var(--conflict); }
 @keyframes life-lost { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
@@ -1097,3 +1110,24 @@ html, body {
   .ds-topbar > .ds-status { grid-area: status; justify-self: center; }
   .ds-status-targets strong { font-size: 19px; }
 }
+
+/* ── 칸 표시: 터치 확정 대기 · 키보드 커서 · 누르는 중 ── */
+.ds-cell.is-pressing { filter: brightness(0.9); outline: 3px solid var(--text-input); outline-offset: -3px; }
+.ds-cell.is-cursor { outline: 2px dashed var(--text-input); outline-offset: -3px; }
+.ds-cell.is-pending { outline: 3px solid var(--pending); outline-offset: -3px; animation: pending-pulse 0.9s ease-in-out infinite alternate; }
+@keyframes pending-pulse { to { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ds-cell.is-pending { animation: none; } }
+
+/* ── 도움말: 조작 안내 · 설정 ── */
+.help-key.help-key-wide { flex: 0 0 54px; font-size: 12px; }
+.help-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-1);
+  cursor: pointer;
+}
+.help-option input { flex: 0 0 auto; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--text-input); }

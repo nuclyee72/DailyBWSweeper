@@ -592,6 +592,32 @@ export function setMark(board, i, mark) {
   return true;
 }
 
+/**
+ * 숫자 칸 눌러 주변 열기 (지뢰찾기의 "코딩"): 칸 i 주변에서 이미 알고 있는 것 —
+ * 검/흰 지뢰 표시, 연 지뢰, 연 특수 칸(양쪽 1씩) — 이 검·흰 숫자를 둘 다 채우면
+ * 남은 안 연 칸(표시 없는 칸)에는 지뢰도 특수 칸도 없다. 그 칸들을 돌려준다.
+ * 숫자가 아직 안 채워졌거나 열 칸이 없으면 빈 배열. (표시가 틀렸으면 지뢰가 섞일 수 있다)
+ */
+export function chordTargets(board, i) {
+  const cell = board.cells[i];
+  if (board.gameOver || !cell.revealed || cell.isMine || cell.special || isBlank(cell)) return [];
+  let black = 0;
+  let white = 0;
+  const rest = [];
+  for (const ni of neighborIdxs(board, i % board.cols, Math.floor(i / board.cols))) {
+    const n = board.cells[ni];
+    if (n.revealed) {
+      if (n.special) { black++; white++; }
+      else if (n.isMine && n.mineColor === COLOR.BLACK) black++;
+      else if (n.isMine) white++;
+    } else if (n.mark) {
+      if (MARK_COLOR[n.mark] === COLOR.BLACK) black++;
+      else white++;
+    } else rest.push(ni);
+  }
+  return black === cell.countBlack && white === cell.countWhite ? rest : [];
+}
+
 export function countMarks(board, mark) {
   let n = 0;
   for (const c of board.cells) if (!c.revealed && c.mark === mark) n++;

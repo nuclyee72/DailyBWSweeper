@@ -121,7 +121,6 @@
 
     <div class="game-body">
       <main class="board-area">
-        <button id="btn-fit" class="btn-fit" type="button">⤢ 맞춤</button>
         <div class="board-stage">
           <div id="board-grid" class="board-grid"></div>
           <svg id="laser-layer" class="laser-layer" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
@@ -140,6 +139,11 @@
         <div class="sp-group">
           <span class="sp-group-label">레이저</span>
           <button class="kp-btn sp-wide" type="button" data-input-mode="laser" aria-pressed="false"><span class="sp-mirror-icon" aria-hidden="true">╱</span> 거울</button>
+        </div>
+        <!-- 터치 화면에서만 보인다: 한 손으로 확대 · 맞춤 -->
+        <div class="sp-group sp-zoom-group">
+          <span class="sp-group-label">화면</span>
+          <button id="btn-zoom" class="kp-btn sp-wide" type="button" aria-label="판 확대"><span class="zoom-ico" aria-hidden="true">🔍</span> <span class="zoom-txt">확대</span></button>
         </div>
       </aside>
     </div>
@@ -216,10 +220,19 @@
           <span class="help-legend"><i class="help-swatch help-swatch-special">◎</i><span>특수 칸은 숫자에서 검·흰 <b>양쪽 모두</b> 1로 세요. 눌러도 터지지 않고 드러나요.</span></span>
           <span class="help-legend"><i class="help-swatch help-swatch-blank"></i><span>회색 빈칸은 주변에 지뢰·특수 칸이 없는 칸이에요. 거울이 될 수 없어요.</span></span></p>
         <p><strong>입력 모드</strong>
-          <span class="help-legend"><b class="help-key">1</b><span><b>열기</b> — 안 연 칸을 열어요.</span></span>
-          <span class="help-legend"><b class="help-key">2</b><span><b>표시</b> — 안 연 칸에 검/흰 지뢰 표시를 달아요. 우클릭은 어느 모드에서나 돼요. 표시한 칸은 열리지 않아요.</span></span>
-          <span class="help-legend"><b class="help-key">3</b><span><b>거울</b> — 연 칸을 눌러 거울을 켜고 꺼요. 마우스를 올리면 레이저가 어떻게 꺾일지 미리 보여요. 지뢰 표시를 단 칸도 그 색 지뢰로 보고 터질지 알려 줘요. 1·2 모드에서는 레이저가 흐리게 보여요.</span></span>
-          키보드 <b>1 · 2 · 3</b>으로 모드를 바꿀 수 있어요.</p>
+          <span class="help-legend"><b class="help-key">1</b><span><b>열기</b> — 안 연 칸을 열어요. <b>숫자 칸</b>을 누르면, 주변의 지뢰 표시가 검·흰 숫자를 다 채웠을 때 나머지 주변 칸을 한꺼번에 열어요.</span></span>
+          <span class="help-legend"><b class="help-key">2</b><span><b>표시</b> — 안 연 칸에 검/흰 지뢰 표시를 달아요. 표시한 칸은 열리지 않아요.</span></span>
+          <span class="help-legend"><b class="help-key">3</b><span><b>거울</b> — 연 칸을 눌러 거울을 켜고 꺼요. 켜기 전에 레이저가 어떻게 꺾일지 미리 보여요. 지뢰 표시를 단 칸도 그 색 지뢰로 보고 터질지 알려 줘요. 1·2 모드에서는 레이저가 흐리게 보여요.</span></span>
+          판 테두리 색이 지금 모드를 알려 줘요 — 표시는 주황, 거울은 초록.</p>
+        <p><strong>컴퓨터</strong>
+          <span class="help-legend"><b class="help-key help-key-wide">우클릭</b><span>어느 모드에서나 표시 팔레트. 누른 채 조각까지 끌어서 놓으면 바로 골라요.</span></span>
+          <span class="help-legend"><b class="help-key help-key-wide">Shift</b><span>Shift+클릭은 어느 모드에서나 거울 켜기/끄기. 누르고 있으면 거울 미리보기가 보여요.</span></span>
+          <span class="help-legend"><b class="help-key help-key-wide">키보드</b><span><b>1·2·3</b> 모드 · <b>방향키</b> 칸 고르기 · <b>Enter</b> 지금 모드 · <b>Space</b> 거울 · <b>Q·W·E</b> 검 표시·흰 표시·지우기 — 마우스를 올린 칸이나 방향키로 고른 칸에.</span></span></p>
+        <p><strong>휴대폰</strong>
+          <span class="help-legend"><b class="help-key help-key-wide">길게</b><span>어느 모드에서나 표시 팔레트. 손을 떼지 않고 조각까지 끌어서 놓으면 바로 골라요.</span></span>
+          <span class="help-legend"><b class="help-key help-key-wide">거울</b><span>한 번 누르면 미리보기, <b>같은 칸을 한 번 더</b> 누르면 켜고 꺼요.</span></span>
+          <span class="help-legend"><b class="help-key help-key-wide">확대</b><span>두 손가락으로 확대, 한 손가락으로 이동. 아래 <b>🔍 확대</b> 버튼으로 한 손으로도 돼요.</span></span>
+          <label class="help-option"><input id="opt-safe-tap" type="checkbox"/><span><b>열기도 두 번 눌러 확정</b> — 작은 칸을 잘못 눌러 라이프를 잃지 않게</span></label></p>
         <p><strong>레이저</strong>
           <span class="help-legend"><i class="help-swatch help-swatch-mirror">╱</i><span>켜진 거울에 <b>반대 색</b> 삼각형으로 들어가면 대각선에 튕기고, <b>같은 색</b>이면 그대로 지나가요.</span></span>
           <span class="help-legend"><i class="help-swatch help-swatch-blank" data-inverter-icon></i><span><b>색 반전기</b>는 빈칸 중 일부예요. 늘 켜져 있고, 가로·세로 어느 쪽으로 지나가든 레이저 <b>색이 바뀌어요</b>.</span></span>
@@ -227,9 +240,7 @@
           <span class="help-legend"><i class="help-swatch help-swatch-boom">✖</i><span><b>같은 색 지뢰</b>에 닿으면 폭발, <b>반대 색 지뢰</b>는 그대로 지나가요.</span></span></p>
         <p><strong>라이프 ♥ 5</strong>지뢰 칸을 열거나, 레이저가 같은 색 지뢰·반대 색 특수 칸에 닿으면 라이프가 1개 줄고 그 행동은 되돌려져요. 대신 그 칸이 무엇이었는지 드러나요. 라이프를 모두 잃으면 끝나요.</p>
         <p><strong>정답 보기</strong>게임이 끝나면(클리어·실패) 위쪽의 <b>정답 보기</b>로 풀이 하나를 볼 수 있어요. 정답이 여러 개일 수 있어서, 내 풀이와 달라도 괜찮아요.</p>
-        <p><strong>데일리</strong>매일 아침 6시에 스탠다드·익스텐디드 퍼즐이 하나씩 바뀌어요. 누구에게나 같은 판이고, 한 번만 도전할 수 있어요.</p>
-        <p><strong>화면</strong>휴대폰에서는 두 손가락으로 확대, 한 손가락으로 이동할 수 있어요.</p>
-      </div>
+        <p><strong>데일리</strong>매일 아침 6시에 스탠다드·익스텐디드 퍼즐이 하나씩 바뀌어요. 누구에게나 같은 판이고, 한 번만 도전할 수 있어요.</p>      </div>
     </div>
   </div>
 

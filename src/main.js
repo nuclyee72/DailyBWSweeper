@@ -14,6 +14,7 @@ import {
   setMark,
   computeLasers,
   revealAllOnLoss,
+  chordTargets,
 } from './core/board.js';
 import {
   buildBoardDom,
@@ -36,6 +37,9 @@ import { initHub, leaveToHub, saveDarkMode } from './hub.js';
 const DAILY_FIRST_DATE = '2026-09-20'; // 지난 퍼즐에서 고를 수 있는 가장 이른 날짜
 const TODAY = () => dateStrKST();
 const SEEN_HELP_KEY = 'bwsweeper:seen-help';
+const SAFE_TAP_KEY = 'bwsweeper:safe-tap';
+const LONG_PRESS_MS = 380;
+const TOUCH_SLOP = 8; // 이만큼 움직이면 길게 누르기·누름 표시를 그만둔다 (판 끌기로 본다)
 
 const $ = (id) => document.getElementById(id);
 const openPanel = (el) => el.classList.add('show');
@@ -56,7 +60,21 @@ const laserSvg = $('laser-layer');
  *   finished: boolean, lostBy: string|null, explodedIdx: number, lives: number } | null}
  */
 let session = null;
-const ui = { inputMode: 'open', hoverIdx: -1, touchIdx: -1, generating: false, answer: null };
+const ui = {
+  inputMode: 'open',
+  hoverIdx: -1, // 마우스가 올라간 칸
+  touchIdx: -1, // 터치로 누르고 있는 칸
+  lastTouchIdx: -1, // 마지막으로 터치한 칸 (확대 버튼이 그 칸을 가운데로)
+  pendingIdx: -1, // 터치 두 번 탭: 한 번 누르고 확정을 기다리는 칸
+  cursorIdx: -1, // 키보드 커서
+  cursorOn: false, // 키보드로 움직였으면 true — 마우스를 움직이면 false
+  shift: false, // Shift를 누르는 중 — 어느 모드에서든 거울 미리보기
+  lastPointer: 'mouse', // 마지막으로 판을 누른 입력 종류 (click 이벤트만으로는 알 수 없을 때가 있다)
+  longPressed: false, // 길게 눌러 팔레트를 열었으면 뒤따르는 click은 무시
+  safeTap: false, // 설정: 터치로 열 때도 두 번 눌러 확정
+  generating: false,
+  answer: null,
+};
 let palette = null;
 let zoom = null;
 let timerId = 0;
@@ -68,6 +86,9 @@ window.__duo = {
   get session() { return session; },
   get inputMode() { return ui.inputMode; },
   get generating() { return ui.generating; },
+  get pendingIdx() { return ui.pendingIdx; },
+  get zoomScale() { return zoom?.scale ?? 1; },
+  get paletteOpen() { return palette?.isOpen() ?? false; },
 };
 
 // ── 판 만들기 ──
@@ -148,6 +169,13 @@ function openGame({ kind, modeId, date, seed, board, progress = null }) {
   zoom.reset();
   closePanel($('daily-result-modal'));
   ui.answer = null;
+  // 칸 DOM을 새로 만들었으니 칸에 달아 둔 표시(확정 대기·커서·누름)는 처음부터
+  for (const cls of Object.keys(cellMarks)) cellMarks[cls] = -1;
+  ui.pendingIdx = -1;
+  ui.cursorIdx = -1;
+  ui.cursorOn = false;
+  ui.touchIdx = -1;
+  ui.lastTouchIdx = -1;
   gameScreen.classList.remove('viewing-answer');
   setInputMode('open');
   $('ds-mode-label').textContent = baseLabel();
@@ -327,6 +355,27 @@ function finish(lostBy) {
 }
 
 // ── 입력 ──
+/*
+ * 조작 한눈에:
+ *   공통   — 누르기 = 지금 모드의 행동 (열기 · 표시 · 거울). 열기 모드에서 숫자 칸을 누르면 주변 열기.
+ *   마우스 — 우클릭 = 표시 팔레트 (누른 채 조각까지 끌어서 놓으면 바로), Shift+클릭 = 거울 켜기/끄기,
+ *            Shift를 누르고 있으면 어느 모드에서든 거울 미리보기.
+ *   키보드 — 1·2·3 모드, 방향키 커서, Enter = 지금 모드의 행동, Space = 거울, Q·W·E = 검·흰 표시·삭제
+ *            (마우스가 올라간 칸 또는 커서 칸에).
+ *   터치   — 길게 누르기 = 표시 팔레트 (손을 떼지 않고 조각까지 끌어서 놓으면 바로),
+ *            거울 모드는 두 번 탭 (첫 탭 = 미리보기, 같은 칸 다시 = 확정), 설정에 따라 열기도 두 번 탭.
+ */
+
+/** 칸에 하나씩만 다는 표시 (확정 대기 · 키보드 커서 · 누르는 중) — 클래스 → 칸 번호 */
+const cellMarks = { 'is-pending': -1, 'is-cursor': -1, 'is-pressing': -1 };
+function markCell(cls, i) {
+  const prev = cellMarks[cls];
+  if (prev === i) return;
+  if (prev >= 0) session?.cellEls[prev]?.classList.remove(cls);
+  cellMarks[cls] = i;
+  if (i >= 0) session?.cellEls[i]?.classList.add(cls);
+}
+
 function setInputMode(mode) {
   ui.inputMode = mode;
   for (const btn of document.querySelectorAll('[data-input-mode]')) {
@@ -335,63 +384,128 @@ function setInputMode(mode) {
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
   for (const m of ['open', 'mark', 'laser']) gameScreen.classList.toggle(`mode-${m}`, m === mode);
+  setPending(-1);
   updatePreview();
   updateHighlight();
 }
 
-function onCellClick(i) {
-  if (!session || session.finished || ui.generating) return;
+/** 이 칸에 지금 모드로 할 수 있는 일이 있는지 (두 번 탭의 첫 탭을 받을지) */
+function canActOn(i) {
   const { board } = session;
   const cell = board.cells[i];
+  if (ui.inputMode === 'laser') return canToggle(board, i);
+  if (ui.inputMode === 'open') return cell.revealed ? chordTargets(board, i).length > 0 : !cell.mark;
+  return !cell.revealed;
+}
 
-  if (ui.inputMode === 'laser') {
-    if (!cell.revealed || !toggleActive(board, i)) return;
-    // 이 거울 때문에 레이저가 터지면: 라이프가 남아 있으면 되돌리고, 레이저가 닿은 칸을 알려 준다
-    const boom = board.emitters.map((em) => traceLaser(board, em)).find((t) => BOOM_ENDS.has(t.end));
-    if (boom && session.lives > 1) {
-      cell.active = !cell.active;
-      loseLife(boom.cellIdx);
+/**
+ * 칸을 눌렀다 (클릭·탭·Enter).
+ * touch: 터치로 눌렀으면 거울 모드(그리고 '두 번 눌러 열기' 설정이면 열기 모드)는 첫 탭에 확정 대기만 한다.
+ */
+function onCellClick(i, { touch = false, shift = false } = {}) {
+  if (!session || session.finished || ui.generating || ui.answer) return;
+  if (shift) {
+    toggleMirror(i);
+    return;
+  }
+  const confirm = touch && (ui.inputMode === 'laser' || (ui.safeTap && ui.inputMode === 'open'));
+  if (confirm && ui.pendingIdx !== i) {
+    if (!canActOn(i)) {
+      setPending(-1);
       return;
     }
-    if (boom) session.lives = 0;
-    refresh();
-    persist();
+    setPending(i);
+    const cell = session.board.cells[i];
+    if (ui.inputMode === 'laser') hintOnce('laser', `한 번 더 누르면 거울을 ${cell.active ? '꺼요' : '켜요'}`);
+    else hintOnce('open', '한 번 더 누르면 열려요');
     return;
   }
-  if (cell.revealed) return;
-  if (ui.inputMode === 'mark') {
-    openPalette(i);
-    return;
-  }
-  if (cell.mark) return; // 지뢰 표시가 달린 칸은 열지 않는다 (표시 먼저 삭제)
+  setPending(-1);
+  act(i, { touch });
+}
 
-  // 지뢰를 열면: 라이프가 남아 있으면 열지 않은 것으로 하고, 그 칸이 무슨 색 지뢰인지 알려 준다
-  if (cell.isMine && session.lives > 1) {
-    loseLife(i);
-    return;
-  }
-  if (cell.isMine) session.lives = 0;
+/** 지금 모드의 행동 */
+function act(i, { touch = false } = {}) {
+  const cell = session.board.cells[i];
+  if (ui.inputMode === 'laser') toggleMirror(i);
+  else if (ui.inputMode === 'mark') openPalette(i, { touch });
+  else if (cell.revealed) chord(i);
+  else openCells([i]);
+}
 
-  const { exploded } = revealCell(board, i);
-  if (exploded) {
-    revealAllOnLoss(board);
-    session.explodedIdx = i;
-    const { traces } = computeLasers(board);
-    session.traces = traces;
-    renderAll(session.cellEls, board);
-    renderExploded();
-    drawLasers(laserSvg, board, traces);
-    updateHud();
-    finish('mine');
+/** 연 칸의 거울을 켜고 끈다 */
+function toggleMirror(i) {
+  if (!session || session.finished || ui.answer) return;
+  const { board } = session;
+  const cell = board.cells[i];
+  if (!cell.revealed || !toggleActive(board, i)) return;
+  setPending(-1);
+  // 이 거울 때문에 레이저가 터지면: 라이프가 남아 있으면 되돌리고, 레이저가 닿은 칸을 알려 준다
+  const boom = board.emitters.map((em) => traceLaser(board, em)).find((t) => BOOM_ENDS.has(t.end));
+  if (boom && session.lives > 1) {
+    cell.active = !cell.active;
+    loseLife(boom.cellIdx);
     return;
   }
+  if (boom) session.lives = 0;
   refresh();
   persist();
 }
 
+/** 숫자 칸 눌러 주변 열기 — 주변 지뢰 표시(와 아는 칸)가 검·흰 숫자를 다 채웠을 때만 */
+function chord(i) {
+  const targets = chordTargets(session.board, i);
+  if (targets.length) openCells(targets);
+}
+
+/**
+ * 안 연 칸들을 연다 (표시 달린 칸은 건너뛴다).
+ * 지뢰를 열면: 라이프가 남아 있으면 열지 않은 것으로 하고 그 칸이 무슨 색 지뢰인지 알려 준다. 마지막 라이프면 폭발.
+ */
+function openCells(idxs) {
+  const { board } = session;
+  const lost = [];
+  for (const i of idxs) {
+    const cell = board.cells[i];
+    if (cell.revealed || cell.mark) continue;
+    if (!cell.isMine) {
+      revealCell(board, i);
+      continue;
+    }
+    if (session.lives > 1) {
+      session.lives -= 1;
+      cell.revealed = true;
+      cell.known = true;
+      lost.push(i);
+      continue;
+    }
+    session.lives = 0;
+    revealCell(board, i);
+    explode(i);
+    return;
+  }
+  refresh();
+  if (lost.length) lifeLostFx(lost);
+  persist();
+}
+
+/** 지뢰를 열어 끝남 */
+function explode(i) {
+  const { board } = session;
+  revealAllOnLoss(board);
+  session.explodedIdx = i;
+  const { traces } = computeLasers(board);
+  session.traces = traces;
+  renderAll(session.cellEls, board);
+  renderExploded();
+  drawLasers(laserSvg, board, traces);
+  updateHud();
+  finish('mine');
+}
+
 /**
  * 실수 — 라이프 1개를 잃고 행동은 없던 일로. 그 행동으로 알 수 있었던 정보는 남긴다:
- *   지뢰를 열었거나 레이저가 지뢰에 닿았으면 그 칸을 "알아낸 지뢰"로 드러내고,
+ *   레이저가 지뢰에 닿았으면 그 칸을 "알아낸 지뢰"로 드러내고,
  *   레이저가 반대 색 특수 칸에 닿았으면 그 특수 칸을 연다.
  */
 function loseLife(cellIdx) {
@@ -402,27 +516,45 @@ function loseLife(cellIdx) {
   cell.mark = null;
   if (cell.isMine) cell.known = true;
   refresh();
-  const el = session.cellEls[cellIdx];
-  el.classList.remove('is-life-lost');
-  void el.offsetWidth; // 애니메이션 다시 시작
-  el.classList.add('is-life-lost');
-  showToast('💔 라이프 -1');
+  lifeLostFx([cellIdx]);
   persist();
 }
 
+function lifeLostFx(idxs) {
+  for (const i of idxs) {
+    const el = session.cellEls[i];
+    el.classList.remove('is-life-lost');
+    void el.offsetWidth; // 애니메이션 다시 시작
+    el.classList.add('is-life-lost');
+  }
+  showToast(`💔 라이프 -${idxs.length}`);
+  navigator.vibrate?.(60);
+}
+
 let toastTimer = 0;
-function showToast(text) {
+function showToast(text, ms = 2600) {
   const t = $('life-toast');
   t.textContent = text;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
-function openPalette(i) {
-  if (!session || session.finished || session.board.cells[i].revealed) return;
-  palette.open(session.cellEls[i], i, session.board.cells[i].mark, zoom.scale);
+/** 조작 안내는 한 번 들어올 때 한 번만 */
+const hinted = new Set();
+function hintOnce(key, text) {
+  if (hinted.has(key)) return;
+  hinted.add(key);
+  showToast(text, 2000);
+}
+
+function openPalette(i, { touch = false } = {}) {
+  if (!session || session.finished || ui.answer || session.board.cells[i].revealed) return false;
+  setPending(-1);
+  markCell('is-pressing', -1);
+  palette.open(session.cellEls[i], i, session.board.cells[i].mark, { touch });
   updatePreview(); // 팔레트가 떠 있는 동안엔 미리보기를 숨긴다
+  return true;
 }
 
 function onMarkPicked(i, mark) {
@@ -432,10 +564,41 @@ function onMarkPicked(i, mark) {
   updatePreview();
 }
 
-/** 거울 모드에서 마우스가 올라간 칸의 거울을 켜고 끄면 레이저가 어떻게 꺾일지 미리 보여준다 */
+/** 단축키 Q·W·E — 같은 표시를 한 번 더 누르면 지운다 */
+function markShortcut(i, mark) {
+  if (!session || session.finished || ui.answer) return;
+  const cell = session.board.cells[i];
+  if (cell.revealed) return;
+  palette.close();
+  onMarkPicked(i, mark && cell.mark === mark ? null : mark);
+}
+
+function setPending(i) {
+  if (ui.pendingIdx === i) return;
+  ui.pendingIdx = i;
+  markCell('is-pending', i);
+  updatePreview();
+  updateHighlight();
+}
+
+/** 마우스·키보드가 가리키는 칸 */
+function pointedIdx() {
+  return ui.cursorOn ? ui.cursorIdx : ui.hoverIdx;
+}
+
+/** 거울을 미리 볼 때 (거울 모드, 또는 Shift를 누르는 중) */
+const mirrorView = () => ui.inputMode === 'laser' || ui.shift;
+
+/**
+ * 거울을 켜고 끄면 레이저가 어떻게 꺾일지 미리 보여준다 —
+ * 마우스를 올린 칸 · 키보드 커서 칸 · 터치로 확정을 기다리는 칸.
+ */
 function updatePreview() {
-  const i = ui.hoverIdx;
-  if (!session || ui.inputMode !== 'laser' || i < 0 || !canToggle(session.board, i) || palette.isOpen()) {
+  if (!session) return;
+  let i = -1;
+  if (ui.pendingIdx >= 0 && ui.inputMode === 'laser') i = ui.pendingIdx;
+  else if (mirrorView()) i = pointedIdx();
+  if (i < 0 || !canToggle(session.board, i) || palette.isOpen()) {
     clearPreview(laserSvg);
     return;
   }
@@ -450,16 +613,72 @@ function setHover(i) {
   updateHighlight();
 }
 
-/** 거울 모드에서 마우스를 올린(터치는 누르고 있는) 칸을 지나가는 레이저를 노랗게 */
+function setShift(on) {
+  if (ui.shift === on) return;
+  ui.shift = on;
+  gameScreen.classList.toggle('is-shift', on);
+  updatePreview();
+  updateHighlight();
+}
+
+/** 키보드 커서 이동 (처음엔 마우스가 올라간 칸이나 시작 칸에서) */
+function moveCursor(dx, dy) {
+  if (!session) return;
+  const { board } = session;
+  let i = ui.cursorOn ? ui.cursorIdx : ui.hoverIdx >= 0 ? ui.hoverIdx : ui.cursorIdx;
+  if (i < 0) i = board.startIdx;
+  else {
+    const x = Math.max(0, Math.min(board.cols - 1, (i % board.cols) + dx));
+    const y = Math.max(0, Math.min(board.rows - 1, Math.floor(i / board.cols) + dy));
+    i = y * board.cols + x;
+  }
+  ui.cursorIdx = i;
+  ui.cursorOn = true;
+  markCell('is-cursor', i);
+  updatePreview();
+  updateHighlight();
+}
+
+function hideCursor() {
+  if (!ui.cursorOn) return;
+  ui.cursorOn = false;
+  markCell('is-cursor', -1);
+}
+
+/** 거울을 미리 볼 때, 가리키는(터치는 누르고 있는) 칸을 지나가는 레이저를 노랗게 */
 function updateHighlight() {
-  const i = ui.hoverIdx >= 0 ? ui.hoverIdx : ui.touchIdx;
-  if (!session || ui.inputMode !== 'laser' || i < 0) {
+  if (!session) return;
+  let i = -1;
+  if (mirrorView()) i = ui.touchIdx >= 0 ? ui.touchIdx : ui.pendingIdx >= 0 ? ui.pendingIdx : pointedIdx();
+  if (i < 0) {
     highlightLasers(laserSvg, []);
     return;
   }
   const ks = [];
   (ui.answer?.traces ?? session.traces).forEach((t, k) => { if (t.cells?.includes(i)) ks.push(k); });
   highlightLasers(laserSvg, ks);
+}
+
+// ── 확대 버튼 (터치 화면) ──
+/** 확대 안 돼 있으면 칸이 손가락 크기(약 42px)가 되게 확대 — 확정 대기 칸이나 마지막으로 누른 칸을 가운데로 */
+function toggleZoom() {
+  if (!session) return;
+  if (zoom.scale > 1) {
+    zoom.reset({ animate: true });
+    return;
+  }
+  const cellW = session.cellEls[0].getBoundingClientRect().width || 20;
+  const target = Math.min(zoom.MAX_SCALE, Math.max(1.8, 42 / cellW));
+  const focus = ui.pendingIdx >= 0 ? ui.pendingIdx : ui.lastTouchIdx;
+  const r = (focus >= 0 ? session.cellEls[focus] : grid).getBoundingClientRect();
+  zoom.zoomTo(target, r.left + r.width / 2, r.top + r.height / 2);
+}
+
+function setSafeTap(on) {
+  ui.safeTap = on;
+  $('opt-safe-tap').checked = on;
+  try { localStorage.setItem(SAFE_TAP_KEY, on ? '1' : '0'); } catch { /* 무시 */ }
+  if (!on && ui.inputMode === 'open') setPending(-1);
 }
 
 // ── 정답 보기 (끝난 판에서만) ──
@@ -713,51 +932,131 @@ function openHelpModal() {
 // ── 이벤트 연결 ──
 function init() {
   // 판: 칸 이벤트는 컨테이너에 한 번만 위임
+  const cellIdxOf = (e) => {
+    const cell = e.target.closest?.('.ds-cell');
+    return cell ? Number(cell.dataset.idx) : -1;
+  };
   grid.addEventListener('click', (e) => {
-    const cell = e.target.closest('.ds-cell');
-    if (cell) onCellClick(Number(cell.dataset.idx));
+    if (ui.longPressed) {
+      ui.longPressed = false;
+      return;
+    }
+    const i = cellIdxOf(e);
+    if (i < 0) return;
+    const mouse = ui.lastPointer === 'mouse';
+    onCellClick(i, { touch: !mouse, shift: mouse && e.shiftKey });
   });
+  // 마우스로 누른 칸 버튼이 포커스를 가져가지 않게 (Space·Enter는 키보드 단축키로 쓴다)
+  grid.addEventListener('mousedown', (e) => e.preventDefault());
+  // 우클릭 메뉴는 늘 막는다. 마우스 우클릭은 pointerdown에서 이미 팔레트를 열었고
+  // (윈도우는 contextmenu가 버튼을 뗄 때 온다 — 그새 끌어서 골라 닫았을 수 있다),
+  // 터치 길게 누르기는 직접 잰다 (iOS는 길게 눌러도 contextmenu가 안 온다). 키보드 메뉴 키만 여기서 연다.
+  let rightDownAt = -Infinity;
   grid.addEventListener('contextmenu', (e) => {
-    const cell = e.target.closest('.ds-cell');
-    if (!cell) return;
+    const i = cellIdxOf(e);
+    if (i < 0) return;
     e.preventDefault();
-    openPalette(Number(cell.dataset.idx));
+    if (ui.lastPointer === 'mouse' && performance.now() - rightDownAt > 1500 && !palette.isOpen()) openPalette(i);
   });
-  // 거울 미리보기는 마우스에서만 (터치는 탭 뒤에 hover가 남아 헷갈린다)
   grid.addEventListener('pointerover', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    const cell = e.target.closest('.ds-cell');
-    setHover(cell ? Number(cell.dataset.idx) : -1);
+    if (e.pointerType !== 'mouse') return; // 터치는 탭 뒤에 hover가 남아 헷갈린다
+    hideCursor();
+    setHover(cellIdxOf(e));
   });
   grid.addEventListener('pointerleave', () => setHover(-1));
-  // 터치: 누르고 있는 동안 그 칸을 지나는 레이저 강조
+  // Shift는 keyup을 놓칠 수 있어서(창 밖에서 뗌) 마우스가 움직일 때도 맞춘다
+  grid.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') setShift(e.shiftKey);
+  });
+
+  // 누르기 시작 — 마우스 우클릭은 팔레트(누른 채 끌어서 고르기), 터치는 누름 표시 · 레이저 강조 · 길게 누르기
+  let longPress = null; // { id, x0, y0, x, y, idx, timer }
+  const cancelLongPress = () => {
+    if (!longPress) return;
+    clearTimeout(longPress.timer);
+    longPress = null;
+  };
   grid.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch') return;
-    const cell = e.target.closest('.ds-cell');
-    ui.touchIdx = cell ? Number(cell.dataset.idx) : -1;
+    const i = cellIdxOf(e);
+    ui.lastPointer = e.pointerType || 'mouse';
+    ui.longPressed = false;
+    if (i < 0) return;
+    if (e.pointerType === 'mouse') {
+      if (e.button !== 2) return;
+      rightDownAt = performance.now();
+      if (openPalette(i)) palette.beginDrag(e);
+      return;
+    }
+    if (!e.isPrimary) return; // 두 번째 손가락 = 핀치 (아래 window 리스너가 길게 누르기를 취소)
+    ui.touchIdx = i;
+    ui.lastTouchIdx = i;
+    markCell('is-pressing', i);
     updateHighlight();
+    cancelLongPress();
+    const lp = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, idx: i, timer: 0 };
+    lp.timer = setTimeout(() => {
+      longPress = null;
+      if (!session || session.finished || ui.answer || session.board.cells[lp.idx].revealed) return;
+      ui.longPressed = true;
+      zoom.cancelGesture(); // 팔레트까지 끄는 동안 판이 따라 움직이지 않게
+      navigator.vibrate?.(12);
+      if (openPalette(lp.idx, { touch: true })) palette.beginDrag({ pointerId: lp.id, clientX: lp.x, clientY: lp.y });
+    }, LONG_PRESS_MS);
+    longPress = lp;
+  });
+  window.addEventListener('pointerdown', (e) => {
+    if (longPress && e.pointerId !== longPress.id) {
+      cancelLongPress();
+      markCell('is-pressing', -1);
+    }
+  }, true);
+  window.addEventListener('pointermove', (e) => {
+    if (!longPress || e.pointerId !== longPress.id) return;
+    longPress.x = e.clientX;
+    longPress.y = e.clientY;
+    if (Math.hypot(e.clientX - longPress.x0, e.clientY - longPress.y0) > TOUCH_SLOP) {
+      cancelLongPress();
+      markCell('is-pressing', -1); // 판을 끄는 중 — 손을 떼도 칸이 눌리지 않는다
+    }
   });
   const endTouch = (e) => {
-    if (e.pointerType !== 'touch' || ui.touchIdx < 0) return;
+    if (e.pointerType === 'mouse') return;
+    cancelLongPress();
+    markCell('is-pressing', -1);
+    if (ui.touchIdx < 0) return;
     ui.touchIdx = -1;
     updateHighlight();
   };
   window.addEventListener('pointerup', endTouch);
   window.addEventListener('pointercancel', endTouch);
 
-  palette = createMarkPalette(document.querySelector('.board-stage'), onMarkPicked);
-  // 터치: 두 손가락 확대, 한 손가락 이동. 확대돼 있으면 '맞춤' 버튼
+  palette = createMarkPalette(gameScreen, onMarkPicked);
+  // 터치: 두 손가락 확대, 한 손가락 이동, 확대 버튼
   zoom = createZoomPan(document.querySelector('.board-area'), document.querySelector('.board-stage'), {
     onChange: (scale) => {
-      $('btn-fit').classList.toggle('show', scale > 1);
-      document.querySelector('.board-area').classList.toggle('is-zoomed', scale > 1);
+      const zoomed = scale > 1;
+      $('btn-zoom').classList.toggle('active', zoomed);
+      $('btn-zoom').setAttribute('aria-label', zoomed ? '판 맞춤' : '판 확대');
+      $('btn-zoom').querySelector('.zoom-ico').textContent = zoomed ? '⤢' : '🔍';
+      $('btn-zoom').querySelector('.zoom-txt').textContent = zoomed ? '맞춤' : '확대';
+      document.querySelector('.board-area').classList.toggle('is-zoomed', zoomed);
     },
   });
-  $('btn-fit').addEventListener('click', () => zoom.reset());
+  $('btn-zoom').addEventListener('click', toggleZoom);
+  // 판 밖(여백)을 누르면 확정 대기를 푼다
+  document.querySelector('.board-area').addEventListener('click', (e) => {
+    if (!e.target.closest('.ds-cell')) setPending(-1);
+  });
+
+  // 설정: 두 번 눌러 열기
+  try { ui.safeTap = localStorage.getItem(SAFE_TAP_KEY) === '1'; } catch { /* 무시 */ }
+  $('opt-safe-tap').checked = ui.safeTap;
+  $('opt-safe-tap').addEventListener('change', (e) => setSafeTap(e.target.checked));
 
   // 레이저 좌표는 실제 칸 크기에 맞춰 계산하므로 창 크기가 바뀌면 다시 그린다
   window.addEventListener('resize', () => {
     if (!session) return;
+    palette.close(); // 화면 좌표에 떠 있으므로 칸 위치가 바뀌면 닫는다
     if (ui.answer) drawLasers(laserSvg, ui.answer.board, ui.answer.traces);
     else drawLasers(laserSvg, session.board, session.traces);
     updatePreview();
@@ -855,17 +1154,51 @@ function init() {
   }
   $('daily-stats-modal').addEventListener('click', (e) => { if (e.target.id === 'daily-stats-modal') closeStatsModal(); });
 
-  // 키보드: 1·2·3 입력 모드, Esc 모달 닫기
+  // 키보드: 1·2·3 입력 모드, 방향키 커서, Enter·Space·Q·W·E 칸 단축키, Shift 거울 미리보기, Esc 닫기
+  // 글자 키는 e.code로 본다 — 한글 입력 상태에서도 같은 자리 키로 동작하게
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       for (const id of ['daily-result-modal', 'game-help-modal']) closePanel($(id));
       closeStatsModal();
+      setPending(-1);
+      hideCursor();
       return;
     }
     if (gameScreen.classList.contains('hidden') || palette.isOpen() || document.querySelector('.modal-overlay.show')) return;
-    const mode = { 1: 'open', 2: 'mark', 3: 'laser' }[e.key];
-    if (mode) setInputMode(mode);
+    if (e.key === 'Shift') {
+      setShift(true);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const mode = { Digit1: 'open', Digit2: 'mark', Digit3: 'laser', Numpad1: 'open', Numpad2: 'mark', Numpad3: 'laser' }[e.code];
+    if (mode) {
+      setInputMode(mode);
+      return;
+    }
+    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (step) {
+      e.preventDefault();
+      moveCursor(...step);
+      return;
+    }
+    const t = pointedIdx();
+    if (t < 0 || !session) return;
+    const handle = {
+      Enter: () => act(t),
+      NumpadEnter: () => act(t),
+      Space: () => toggleMirror(t),
+      KeyQ: () => markShortcut(t, 'mine-black'),
+      KeyW: () => markShortcut(t, 'mine-white'),
+      KeyE: () => markShortcut(t, null),
+    }[e.code];
+    if (!handle || session.finished || ui.answer) return;
+    e.preventDefault();
+    // 마지막으로 누른 버튼(입력 모드 등)에 포커스가 남아 있으면 Space·Enter가 그 버튼도 누르므로 놓는다
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
+    handle();
   });
+  document.addEventListener('keyup', (e) => { if (e.key === 'Shift') setShift(false); });
+  window.addEventListener('blur', () => setShift(false));
 
   // 탭을 떠나 있는 동안은 시간을 세지 않는다
   document.addEventListener('visibilitychange', () => {

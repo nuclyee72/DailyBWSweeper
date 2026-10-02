@@ -2,6 +2,7 @@
  * zoomPan.js — 터치 화면에서 판 확대/이동 (스도쿠 핀치 줌과 같은 방식).
  * - 두 손가락: 가운데 점을 기준으로 확대/축소
  * - 한 손가락: 끌면 이동. 조금이라도 끌었으면 손을 뗄 때 칸이 눌리지 않게 클릭을 막는다.
+ * - zoomTo: 확대 버튼 — 한 칸을 가운데로 가져오며 확대 (한 손 조작)
  * 마우스는 건드리지 않는다 (데스크톱은 판이 한눈에 들어온다).
  *
  * viewport(.board-area) 안의 content(.board-stage)에 translate + scale을 건다 (transform-origin 0 0).
@@ -60,9 +61,37 @@ export function createZoomPan(viewport, content, { onChange } = {}) {
     apply();
   }
 
-  function reset() {
+  function reset({ animate = false } = {}) {
+    if (animate) animateNext();
     scale = 1;
     apply();
+  }
+
+  /** 버튼으로 확대·맞춤할 때만 부드럽게 (손가락으로 할 땐 바로 따라가야 한다) */
+  let animTimer = 0;
+  function animateNext() {
+    content.classList.add('is-zoom-anim');
+    clearTimeout(animTimer);
+    animTimer = setTimeout(() => content.classList.remove('is-zoom-anim'), 260);
+  }
+
+  /** 화면 좌표 (cx, cy)의 판 위치를 viewport 가운데로 가져오며 newScale로 확대 */
+  function zoomTo(newScale, cx, cy) {
+    animateNext();
+    const vr = viewport.getBoundingClientRect();
+    const { left, top } = layoutOrigin();
+    const lx = (cx - left - tx) / scale;
+    const ly = (cy - top - ty) / scale;
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+    tx = vr.left + vr.width / 2 - left - lx * scale;
+    ty = vr.top + vr.height / 2 - top - ly * scale;
+    apply();
+  }
+
+  /** 지금 손짓(한 손가락 끌기)을 끝낸다 — 길게 눌러 표시 팔레트를 연 뒤 손가락을 끌어도 판이 움직이지 않게 */
+  function cancelGesture() {
+    pan = null;
+    suppressClick = true;
   }
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -137,5 +166,5 @@ export function createZoomPan(viewport, content, { onChange } = {}) {
     }
   }, true);
 
-  return { reset, get scale() { return scale; } };
+  return { reset, zoomTo, cancelGesture, MAX_SCALE, get scale() { return scale; } };
 }
